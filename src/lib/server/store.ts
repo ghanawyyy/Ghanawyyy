@@ -1,5 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
+import os from "os";
 
 /**
  * Minimal JSON file store.
@@ -16,9 +17,23 @@ import path from "path";
  * It never holds a readable password for any user or any third-party account.
  */
 
-const DATA_DIR = process.env.DATA_DIR
-  ? path.resolve(process.env.DATA_DIR)
-  : path.join(process.cwd(), ".data");
+function resolveDataDir(): string {
+  if (process.env.DATA_DIR) return path.resolve(process.env.DATA_DIR);
+  // On Vercel (and most serverless hosts) the project directory is read-only
+  // at runtime — only the OS temp dir is writable. Writing anywhere else
+  // throws EROFS/EACCES and 500s every request. Fall back to tmp there.
+  //
+  // IMPORTANT: tmp is ephemeral and not shared across serverless instances,
+  // so data written this way does not reliably persist. It's enough to run
+  // and demo the app, but for real persistence set DATA_DIR to a writable
+  // volume, or swap this module for a database / Vercel KV. See README.
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return path.join(os.tmpdir(), "recovery-assistant-data");
+  }
+  return path.join(process.cwd(), ".data");
+}
+
+const DATA_DIR = resolveDataDir();
 
 export interface UserRecord {
   id: string;
